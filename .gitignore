@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# 测试 / 输出
+.pytest_cache/
+*.log
+logs/*.log
+*_reconstructed.dxf
+output/*.json
+
+# 打包
+build/dist/
+build/build/
+*.spec.bak
+
+# IDE
+.idea/
+.vscode/
+
+# 测试数据（大文件，不入库）
+*.dxf
+!tests/fixtures/*.dxf

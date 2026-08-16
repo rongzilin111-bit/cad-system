@@ -1,0 +1,16 @@
+# 依赖清单（依据 ARCHITECTURE.md §2 技术选型，锁定版本与实测一致）
+
+# CAD 解析库（锁定 1.4.4，与测试文件实测版本一致）
+ezdxf==1.4.4
+
+# 数值计算（ezdxf 已依赖 numpy，此处显式声明）
+numpy
+
+# 空间索引：最近点查询（cKDTree）；可选，可回退纯 numpy 网格方案
+scipy
+
+# GUI 框架（LGPL 免商用）
+PySide6==6.5.*
+
+# 测试
+pytest
