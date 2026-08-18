@@ -133,10 +133,54 @@ class GeometryIndex:
                 self._tree = cKDTree(self._coords)
             except Exception:  # noqa: BLE001 —— scipy 缺失，回退暴力
                 self._tree = None
+        # 圆心型吸附专用：惰性构建「圆心/弧心」子索引（M3.3 才用）。
+        self._center_points: list[FeaturePoint] = []
+        self._center_tree = None
 
     @property
     def point_count(self) -> int:
         return len(self.points)
+
+    def nearest_center(self, x: float, y: float) -> tuple[float, Optional[FeaturePoint]]:
+        """返回 (最近距离, 最近圆心/弧心)；供圆心型定义点吸附（M3.3）。
+
+        只在 kind ∈ {circle_center, arc_center} 的特征点里查最近，
+        避免圆心吸附到线端点等无关特征点（见 ARCHITECTURE.md §3.3）。
+        """
+        if self._center_tree is None:
+            self._build_center_index()
+        if not self._center_points:
+            return float("inf"), None
+        if self._center_tree is None:  # scipy 缺失，回退暴力
+            return self._nearest_center_bruteforce(x, y)
+        dist, idx = self._center_tree.query([x, y])
+        return float(dist), self._center_points[int(idx)]
+
+    def _build_center_index(self) -> None:
+        """惰性构建圆心/弧心子索引（首次 nearest_center 时）。"""
+        self._center_points = [
+            p for p in self.points if p.kind in ("arc_center", "circle_center")
+        ]
+        if not self._center_points:
+            return
+        coords = np.asarray(
+            [[p.x, p.y] for p in self._center_points], dtype=float
+        )
+        try:
+            from scipy.spatial import cKDTree  # 局部导入，便于 PyInstaller 裁剪
+            self._center_tree = cKDTree(coords)
+        except Exception:  # noqa: BLE001 —— scipy 缺失，回退暴力
+            self._center_tree = None
+
+    def _nearest_center_bruteforce(self, x: float, y: float) -> tuple[float, Optional[FeaturePoint]]:
+        """圆心子集暴力回退。"""
+        coords = np.asarray(
+            [[p.x, p.y] for p in self._center_points], dtype=float
+        )
+        delta = coords - np.array([x, y], dtype=float)
+        dists = np.einsum("ij,ij->i", delta, delta)
+        idx = int(np.argmin(dists))
+        return float(math.sqrt(dists[idx])), self._center_points[idx]
 
     def nearest(self, x: float, y: float) -> tuple[float, Optional[FeaturePoint]]:
         """返回 (最近距离, 最近特征点)；空索引时 (inf, None)。"""

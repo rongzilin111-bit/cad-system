@@ -22,6 +22,7 @@ class MeasurementPoint:
     corrected: bool = False
     corrected_x: Optional[float] = None
     corrected_y: Optional[float] = None
+    unresolved: bool = False       # 吸附目标超出 snap_radius，保留原坐标未能纠偏
     distance: Optional[float] = None
     nearest_entity: Optional[str] = None
     confidence: float = 1.0        # 1.0 高置信；吸附后一致性自检失败标 low_confidence
@@ -91,6 +92,7 @@ class Result:
     dxf_version: str = ""
     detach_tolerance: float = 0.01
     snap_radius: float = 50.0
+    processed_at: str = ""          # 处理时间（ISO）；空时由 json_export 兜底填充
     total_dimensions: int = 0
     unattached_count: int = 0
     summary: list[SummaryEntry] = field(default_factory=list)

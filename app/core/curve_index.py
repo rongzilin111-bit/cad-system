@@ -61,6 +61,32 @@ class CurvePrimitive:
         a0, a1 = self.data[3], self.data[4]
         return _point_arc_dist(x, y, cx, cy, r, a0, a1, d)
 
+    def closest_point(self, x: float, y: float) -> tuple[float, float]:
+        """点到该基元的最近点（投影点）坐标，供 M3.3 吸附记录纠偏坐标。"""
+        if self.kind == "segment":
+            x1, y1, x2, y2 = self.data
+            dx, dy = x2 - x1, y2 - y1
+            if dx == 0.0 and dy == 0.0:  # 退化点
+                return x1, y1
+            t = ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)
+            t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+            return x1 + t * dx, y1 + t * dy
+        cx, cy, r = self.data[0], self.data[1], self.data[2]
+        ang = math.atan2(y - cy, x - cx) % (2 * math.pi)
+        if self.kind == "circle":
+            return cx + r * math.cos(ang), cy + r * math.sin(ang)
+        # arc：带角度范围，弧内取径向投影，弧外取最近端点
+        a0, a1 = self.data[3], self.data[4]
+        if _angle_in_arc(ang, a0, a1):
+            return cx + r * math.cos(ang), cy + r * math.sin(ang)
+        sx = cx + r * math.cos(a0)
+        sy = cy + r * math.sin(a0)
+        ex = cx + r * math.cos(a1)
+        ey = cy + r * math.sin(a1)
+        if math.hypot(x - sx, y - sy) <= math.hypot(x - ex, y - ey):
+            return sx, sy
+        return ex, ey
+
     def bbox(self) -> tuple[float, float, float, float]:
         """返回 (minx, miny, maxx, maxy)，用于登记网格。"""
         if self.kind == "segment":
