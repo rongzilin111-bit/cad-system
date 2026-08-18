@@ -34,7 +34,7 @@ from app.config import (
     TARGET_LAYER,
 )
 from app.core.bbox import compute_bbox
-from app.core.blockify import blockify
+from app.core.blockify import blockify, clean_orphan_blocks
 from app.core.curve_index import CurveIndex
 from app.core.detector import detect_unattached
 from app.core.dimension_text import parse_dimension
@@ -67,10 +67,13 @@ def run_pipeline(
     expand_insert: bool = False,
     layer: str = TARGET_LAYER,
     do_blockify: bool = True,
+    clean_orphan: bool = False,
 ) -> PipelineOutput:
     """加载 → 索引 → 判定 → 提取 → 重构 → 标准化，产出 `PipelineOutput`。
 
-    参数皆可被 GUI 覆盖；`do_blockify=False` 时跳过图元标准化（只检测不改图）。
+    参数皆可被 GUI 覆盖；`do_blockify=False` 时跳过图元标准化（只检测不改图）；
+    `clean_orphan=True` 时在标准化后清理无引用的孤儿 `*D` 块（默认关，严格满足
+    「保留块定义」，§4.6；仅在 `do_blockify=True` 时生效）。
     加载失败抛 `LoadError` / `FileNotFoundError`，由上层友好提示。
     """
     loaded = load_dxf(path)
@@ -103,6 +106,10 @@ def run_pipeline(
     warnings = list(loaded.warnings)
     if do_blockify:
         warnings.extend(blockify(doc, results, layer=layer))
+        if clean_orphan:
+            removed = clean_orphan_blocks(doc)
+            if removed:
+                warnings.append(f"已清理孤儿 *D 块 {len(removed)} 个")
 
     summary = [
         SummaryEntry(handle=r.handle, type=r.type, value=r.value, unattached=r.unattached)

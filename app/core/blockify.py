@@ -165,8 +165,50 @@ def blockify(
     return warnings
 
 
+def clean_orphan_blocks(doc: Drawing) -> list[str]:
+    """清理无任何引用的孤儿 `*D` 匿名块，返回删除的块名清单（§4.6）。
+
+    引用来源两类（都收集进 `referenced` 集）：
+        a) 任意布局（模型空间 + 各图纸空间）里 DIMENSION/ARC_DIMENSION 组码 2
+           （`dxf.geometry`）与 INSERT 组码 2（`dxf.name`）；
+        b) 任意块定义内部嵌套的 INSERT 组码 2（块套块）。
+    仅删除「块名以 `*D` 前缀」且**不在**引用集的块，绝不触碰用户命名块；
+    删除失败（被占用等）记入返回清单之外的静默跳过，不中断。
+    """
+    referenced: set[str] = set()
+
+    def _scan(entities) -> None:
+        for e in entities:
+            t = e.dxftype()
+            if t == "INSERT":
+                referenced.add(e.dxf.name)
+            elif t in _DIMENSION_TYPES:
+                geo = e.dxf.get("geometry")
+                if geo:
+                    referenced.add(geo)
+
+    # a) 所有布局（含模型空间与各图纸空间）。
+    for layout in doc.layouts:
+        _scan(layout)
+    # b) 所有块定义内部（块套块的嵌套引用）。
+    for block in doc.blocks:
+        _scan(block)
+
+    deleted: list[str] = []
+    for block in list(doc.blocks):
+        name = block.name
+        if name.startswith("*D") and name not in referenced:
+            try:
+                doc.blocks.delete_block(name, safe=False)
+            except Exception:  # noqa: BLE001 —— 单个块删除失败不中断
+                continue
+            deleted.append(name)
+    return deleted
+
+
 __all__ = [
     "convert_dimension_to_block",
     "blockify",
     "relayer_existing_blocks",
+    "clean_orphan_blocks",
 ]
