@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Iterator, Optional, Sequence
 
 import ezdxf
+from ezdxf import recover
 from ezdxf.document import Drawing
 from ezdxf.entities import DXFEntity
 
@@ -156,17 +157,23 @@ def _read_doc(path: Path) -> tuple[Drawing, list[str], bool]:
     except (ezdxf.DXFStructureError, ezdxf.DXFVersionError, ezdxf.DXFError) as exc:
         warnings.append(f"结构/版本异常：{type(exc).__name__}: {exc}")
         doc = None
-    except OSError:
-        raise  # 文件级错误（权限/占用等）原样上抛，由 GUI 提示
+    except OSError as exc:
+        # ezdxf 对「非 DXF / 空 / 损坏」文件也抛 OSError（如 "not a DXF file"），
+        # 与权限 / 占用等真 I/O 错误一并视为「无法读取」，交给下方 recover 兜底，
+        # 最终失败时抛 LoadError（友好提示），绝不向上抛裸 OSError 导致程序崩溃。
+        if isinstance(exc, FileNotFoundError):
+            raise  # 文件不存在（load_dxf 入口已判，此处防御性保留）
+        warnings.append(f"文件读取失败（可能损坏或非 DXF）：{type(exc).__name__}: {exc}")
+        doc = None
     except Exception as exc:  # noqa: BLE001 —— 兜底，绝不因未知异常崩溃
         warnings.append(f"读取异常：{type(exc).__name__}: {exc}")
         doc = None
 
-    # 3. 严重损坏回退 recover 修复模式。
+    # 3. 严重损坏回退 recover 修复模式（需 `from ezdxf import recover` 显式导入）。
     if doc is None:
         recovered = True
         try:
-            result = ezdxf.recover.readfile(str(path), errors="replace")
+            result = recover.readfile(str(path), errors="replace")
             # recover.readfile 返回 (doc, auditor) 二元组
             doc, auditor = result if isinstance(result, tuple) else (result, None)
             warnings.append("已进入 recover 修复模式读取（可能丢失部分损坏数据）")
